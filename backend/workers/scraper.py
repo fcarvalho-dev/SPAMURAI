@@ -54,7 +54,7 @@ async def _scan_inbox_async(task, user_id: str, encrypted_token: str, scan_job_i
         await _update_scan_status(async_session, scan_job_id, "failed", error="Token inválido")
         return
 
-    await _update_scan_status(async_session, scan_job_id, "running", started_at=datetime.now(timezone.utc))
+    await _update_scan_status(async_session, scan_job_id, "running", started_at=datetime.utcnow())
     logger.info("scan_started", user_id=user_id, scan_job_id=scan_job_id)
 
     indexed = 0
@@ -94,7 +94,7 @@ async def _scan_inbox_async(task, user_id: str, encrypted_token: str, scan_job_i
         await _update_scan_status(
             async_session, scan_job_id, "done",
             total_indexed=indexed,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.utcnow(),
         )
         logger.info("scan_completed", user_id=user_id, indexed=indexed)
 

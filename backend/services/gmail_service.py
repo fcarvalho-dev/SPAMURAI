@@ -187,7 +187,7 @@ async def fetch_messages_metadata(
                 sender=sender,
                 sender_domain=_parse_sender_domain(sender),
                 subject=header_map.get("subject", "(sem assunto)"),
-                date=date,
+                date=date.replace(tzinfo=None),
                 is_read="UNREAD" not in msg.get("labelIds", []),
                 gmail_category=next(
                     (l.lower().replace("category_", "")
@@ -266,3 +266,4 @@ async def move_to_label(access_token: str, message_ids: list[str], label_id: str
             ).execute
         )
         await asyncio.sleep(0.2)
+

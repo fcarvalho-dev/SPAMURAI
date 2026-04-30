@@ -1,96 +1,43 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+import type { BulkDeletePreviewResponse, ScanStartResponse, Sender } from "./types"
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000"
+
+async function jsonFetch<T>(input: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(input, {
     ...init,
-    credentials: 'include', // envia cookie de sessão
+    credentials: "include",
     headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
     },
-  });
-
-  if (res.status === 401) {
-    // Redireciona para login se sessão expirou
-    window.location.href = '/';
-    throw new Error('Unauthorized');
-  }
-
+  })
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail ?? 'Request failed');
+    const text = await res.text().catch(() => "")
+    throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`)
   }
-
-  return res.json() as Promise<T>;
+  return (await res.json()) as T
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export type Sender = {
-  domain: string;
-  display_name: string;
-  ai_category: string | null;
-  total: number;
-  unread: number;
-  oldest: string | null;
-  newest: string | null;
-  has_unsubscribe: boolean;
-};
-
-export type ScanProgress = {
-  status: 'pending' | 'running' | 'done' | 'failed';
-  indexed: number;
-  total: number;
-};
-
-export type BulkDeletePreview = {
-  action_id: string;
-  affected: number;
-  query: string;
-  message: string;
-};
-
-export type BulkDeleteResult = {
-  affected: number;
-  executed: boolean;
-};
-
-// ─── API calls ────────────────────────────────────────────────────────────────
-
 export const api = {
-  auth: {
-    me: () => apiFetch<{ user_id: string; email: string }>('/auth/me'),
-    logout: () => apiFetch<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
-    loginUrl: `${API_URL}/auth/login`,
-  },
+  getSenders: () => jsonFetch<Sender[]>(`${API_BASE}/gmail/senders`),
 
-  gmail: {
-    getSenders: () => apiFetch<Sender[]>('/gmail/senders'),
+  startScan: () =>
+    jsonFetch<ScanStartResponse>(`${API_BASE}/gmail/scan`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 
-    startScan: () => apiFetch<{ scan_job_id: string }>('/gmail/scan', { method: 'POST' }),
+  previewBulkDelete: (sender_domain: string) =>
+    jsonFetch<BulkDeletePreviewResponse>(`${API_BASE}/gmail/bulk-delete/preview`, {
+      method: "POST",
+      body: JSON.stringify({ sender_domain, dry_run: true }),
+    }),
 
-    // SSE — retorna EventSource, não usa apiFetch
-    scanProgress: (scanJobId: string): EventSource =>
-      new EventSource(`${API_URL}/gmail/scan/${scanJobId}/progress`, {
-        withCredentials: true,
-      }),
+  executeBulkDelete: (action_id: string) =>
+    jsonFetch<{ ok?: boolean; message?: string }>(`${API_BASE}/gmail/bulk-delete/execute`, {
+      method: "POST",
+      body: JSON.stringify({ action_id }),
+    }),
 
-    // PASSO 1: preview antes de deletar
-    previewDelete: (senderDomain: string, beforeDate?: Date) =>
-      apiFetch<BulkDeletePreview>('/gmail/bulk-delete/preview', {
-        method: 'POST',
-        body: JSON.stringify({
-          sender_domain: senderDomain,
-          before_date: beforeDate?.toISOString() ?? null,
-          dry_run: true,
-        }),
-      }),
-
-    // PASSO 2: executa após confirmação explícita
-    executeDelete: (actionId: string) =>
-      apiFetch<BulkDeleteResult>('/gmail/bulk-delete/execute', {
-        method: 'POST',
-        body: JSON.stringify({ action_id: actionId }),
-      }),
-  },
-};
+  scanProgressUrl: (scanJobId: string) => `${API_BASE}/gmail/scan/${scanJobId}/progress`,
+}
