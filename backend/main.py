@@ -37,7 +37,7 @@ app.add_middleware(
     session_cookie="gmail_agent_session",
     max_age=8 * 60 * 60,   # 8h
     https_only=settings.is_production,
-    same_site="strict",
+    same_site="lax",
 )
 
 # CORS — só o frontend autorizado
@@ -104,3 +104,4 @@ app.include_router(gmail.router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
