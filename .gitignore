@@ -44,3 +44,6 @@ Thumbs.db
 backend/upgrade_plan.py
 backend/migrate2.py
 docs/screenshots/
+
+CLAUDE.md
+GEMINI.md
