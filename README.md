@@ -16,7 +16,7 @@
 
 ## Screenshots
 
-| Dashboard | AI Chat (Kenzo) |
+| Dashboard | AI Chat (Kenzo) em ação |
 |---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Kenzo](docs/screenshots/kenzo_01.png) |
 
