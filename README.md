@@ -18,11 +18,11 @@
 
 | Dashboard | AI Chat (Kenzo) |
 |---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Kenzo](docs/screenshots/kenzo.png) |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Kenzo](docs/screenshots/kenzo_01.png) |
 
 | Lixeira | Configurações PRO |
 |---|---|
-| ![Lixeira](docs/screenshots/trash.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Lixeira](docs/screenshots/trash.png) | ![Settings](docs/screenshots/kenzo_02.png) |
 
 ---
 
@@ -187,3 +187,4 @@ spamurai/
 ---
 
 *Built as a portfolio project to demonstrate fullstack engineering across modern web, async processing, AI integration, and production-grade security practices.*
+
