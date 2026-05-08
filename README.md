@@ -20,7 +20,7 @@
 |---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Kenzo](docs/screenshots/kenzo_01.png) |
 
-| Lixeira | Configurações PRO |
+| Lixeira | AI Chat (Kenzo) |
 |---|---|
 | ![Lixeira](docs/screenshots/trash.png) | ![Settings](docs/screenshots/kenzo_02.png) |
 
