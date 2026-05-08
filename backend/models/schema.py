@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime
+from enum import Enum as PyEnum
 
 from sqlalchemy import (
     ARRAY,
     Boolean,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -20,6 +22,17 @@ class Base(DeclarativeBase):
     pass
 
 
+class PlanType(str, PyEnum):
+    free = "free"
+    pro = "pro"
+    business = "business"
+
+
+class BillingCycle(str, PyEnum):
+    monthly = "monthly"
+    weekly = "weekly"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -27,8 +40,16 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     # Refresh token criptografado com AES-256-GCM — NUNCA em texto plano
     encrypted_refresh_token: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    picture_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    plan: Mapped[PlanType] = mapped_column(Enum(PlanType, name="plantype"), default=PlanType.free, nullable=False)
+    billing_cycle: Mapped[BillingCycle | None] = mapped_column(Enum(BillingCycle, name="billingcycle"), nullable=True)
+    plan_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deletions_this_month: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deletions_month_reset: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class EmailMetadata(Base):
@@ -112,3 +133,38 @@ class ScanJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class AutoRule(Base):
+    __tablename__ = "auto_rules"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    condition_type: Mapped[str] = mapped_column(String(50), nullable=False)   # "domain" | "category" | "keyword"
+    condition_value: Mapped[str] = mapped_column(String(255), nullable=False) # "newsletter.com" | "spam" | "promoção"
+    action_type: Mapped[str] = mapped_column(String(50), nullable=False)      # "trash" | "mark_read" | "label"
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    __table_args__ = (
+        Index("ix_rule_user", "user_id", "is_active"),
+    )
+
+
+class Subscription(Base):
+    """Subscriptions registered by the user (e.g. newsletters / services to monitor)."""
+    __tablename__ = "subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    sender_domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    renewal_date: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_sub_user_domain", "user_id", "sender_domain", unique=True),
+    )

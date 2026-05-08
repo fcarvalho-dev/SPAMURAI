@@ -35,3 +35,12 @@ Thumbs.db
 # Local DB
 *.db
 *.sqlite
+
+# Logs
+*.log
+
+# Dev scripts (não fazem parte do projeto)
+.claude/
+backend/upgrade_plan.py
+backend/migrate2.py
+docs/screenshots/

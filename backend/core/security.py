@@ -12,8 +12,6 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 
-# ─── Token Encryption (AES-256-GCM) ─────────────────────────────────────────
-
 def _get_key() -> bytes:
     return bytes.fromhex(settings.token_encryption_key)
 
@@ -35,12 +33,9 @@ def decrypt_token(stored: str) -> str:
         aesgcm = AESGCM(_get_key())
         return aesgcm.decrypt(nonce, ciphertext, None).decode()
     except Exception:
-        # Não logar o valor — apenas indicar falha
         logger.error("token_decryption_failed")
         raise ValueError("Invalid or tampered token")
 
-
-# ─── SSRF Guard ──────────────────────────────────────────────────────────────
 
 _BLOCKED_NETWORKS = [
     ipaddress.ip_network("127.0.0.0/8"),
@@ -58,7 +53,7 @@ def _is_blocked_ip(ip: str) -> bool:
         addr = ipaddress.ip_address(ip)
         return any(addr in net for net in _BLOCKED_NETWORKS)
     except ValueError:
-        return True  # IP inválido = bloquear
+        return True  # invalid IP — block
 
 
 async def safe_unsubscribe(url: str) -> bool:
@@ -78,7 +73,6 @@ async def safe_unsubscribe(url: str) -> bool:
         if not hostname:
             return False
 
-        # Resolve DNS e valida o IP resultante
         resolved_ip = socket.gethostbyname(hostname)
         if _is_blocked_ip(resolved_ip):
             logger.warning("unsub_blocked_ip", hostname=hostname, ip=resolved_ip)
@@ -86,7 +80,7 @@ async def safe_unsubscribe(url: str) -> bool:
 
         async with httpx.AsyncClient(
             timeout=5.0,
-            follow_redirects=False,  # não seguir redirects — podem ir para internal
+            follow_redirects=False,  # redirects may point to internal hosts
             max_redirects=0,
         ) as client:
             resp = await client.post(
@@ -95,15 +89,13 @@ async def safe_unsubscribe(url: str) -> bool:
             )
             return resp.status_code in (200, 204)
 
-    except Exception as e:
-        # Logar sem a URL completa — pode conter tokens
+    except Exception:
+        # Log without the full URL — may contain tokens
         logger.error("unsub_failed", hostname=parsed.hostname if parsed else "unknown")
         return False
 
 
-# ─── Timing-safe comparison ──────────────────────────────────────────────────
-
 def constant_time_compare(a: str, b: str) -> bool:
-    """Para comparação de tokens/secrets — evita timing attacks."""
+    """Timing-safe comparison — use for tokens and secrets to prevent timing attacks."""
     import hmac
     return hmac.compare_digest(a.encode(), b.encode())

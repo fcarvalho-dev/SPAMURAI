@@ -1,111 +1,189 @@
-# Gmail AI Agent
+# ⚔️ Spamurai
 
-Gerenciamento inteligente de inbox com IA. Organiza, limpa e prioriza emails em massa.
+> AI-powered inbox management — classify, clean, and control your Gmail with precision.
 
-## Stack
+![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=flat&logo=nextdotjs&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?style=flat&logo=celery&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat&logo=python&logoColor=white)
 
-- **Backend:** Python 3.12 + FastAPI + Celery + SQLAlchemy
-- **Frontend:** Next.js 15 + TanStack Query + Tailwind CSS
-- **IA:** Claude (Anthropic) — classificação em batch de remetentes
-- **Queue:** Celery + Redis — scraping assíncrono de 90k emails
-- **DB:** PostgreSQL
-- **Tooling:** Ruff (Python) + Biome (JS) + Bun
+**Spamurai** is a fullstack portfolio project demonstrating real-world engineering across modern web development, async task processing, AI integration, and OAuth-based authentication — all in a cohesive, production-shaped application.
 
-## Setup local
+---
 
-### 1. Pré-requisitos
+## Screenshots
 
-```bash
-# Python 3.12+
-python --version
+| Dashboard | AI Chat (Kenzo) |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Kenzo](docs/screenshots/kenzo.png) |
 
-# Bun
-curl -fsSL https://bun.sh/install | bash
+| Lixeira | Configurações PRO |
+|---|---|
+| ![Lixeira](docs/screenshots/trash.png) | ![Settings](docs/screenshots/settings.png) |
 
-# Docker (para Redis + Postgres)
-docker --version
+---
+
+## Features
+
+- **Gmail OAuth2** — secure login with Google, scoped to Gmail access only
+- **Inbox scanning** — indexes up to 5,000 emails via Gmail API with real-time SSE progress
+- **AI classification** — categorizes senders into 10 categories using Groq (LLaMA 3.3 70B)
+- **Kenzo AI Chat** — conversational assistant with function calling: filter, delete, summarize
+- **Bulk delete** — permanent deletion with monthly limits enforced per plan (Free: 50/month)
+- **Trash management** — view, restore, and permanently empty Gmail trash
+- **Auto rules** — define conditions to automatically act on incoming senders
+- **Subscription monitoring** — track and alert on recurring sender activity
+- **5 themes** — dark/light variants with full CSS variable theming
+- **Plan system** — Free / Pro / Business with feature gating on backend and frontend
+- **Async processing** — Celery + Redis task queue for long-running Gmail operations
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────────────────────────┐
+│   Next.js 15    │────▶│           FastAPI Backend             │
+│   TypeScript    │     │                                       │
+│   TanStack      │     │  ┌─────────┐  ┌──────────────────┐  │
+│   Query         │     │  │ Routers │  │  Groq AI Service │  │
+│   Tailwind CSS  │     │  │ auth    │  │  LLaMA 3.3 70B   │  │
+└─────────────────┘     │  │ gmail   │  └──────────────────┘  │
+                        │  │ ai_chat │                          │
+                        │  │ rules   │  ┌──────────────────┐  │
+                        │  │ plans   │  │  Celery Workers  │  │
+                        │  └─────────┘  │  Redis Broker    │  │
+                        │               └──────────────────┘  │
+                        │  ┌──────────────────────────────┐   │
+                        │  │  PostgreSQL (SQLAlchemy async)│   │
+                        │  └──────────────────────────────┘   │
+                        └──────────────────────────────────────┘
+                                          │
+                                ┌─────────────────┐
+                                │   Gmail API v1   │
+                                │   Google OAuth2  │
+                                └─────────────────┘
 ```
 
-### 2. Variáveis de ambiente
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15, TypeScript, Tailwind CSS, TanStack Query |
+| Backend | FastAPI, Python 3.11, SQLAlchemy (async), Pydantic |
+| Database | PostgreSQL |
+| Queue | Celery + Redis |
+| AI | Groq API — LLaMA 3.3 70B (function calling) |
+| Auth | Google OAuth2 — AES-256-GCM encrypted refresh tokens |
+| Real-time | Server-Sent Events (SSE) for scan progress |
+
+---
+
+## Security
+
+- Refresh tokens encrypted at rest with AES-256-GCM
+- CSRF protection via Redis-backed OAuth state (TTL: 10min)
+- IDOR protection — all queries scoped to authenticated user ID
+- SSRF guard on unsubscribe endpoint
+- Rate limiting via SlowAPI
+- Security headers middleware (HSTS, CSP, X-Frame-Options)
+- Audit log for all destructive actions
+- Input validation at every system boundary
+- `OAUTHLIB_RELAX_TOKEN_SCOPE` handled without exposing scope mismatch to users
+
+---
+
+## Running Locally
+
+### Prerequisites
+
+- Docker (PostgreSQL + Redis)
+- Python 3.11+
+- Node.js 20+ or Bun
+- Google Cloud project with OAuth2 credentials and Gmail API enabled
+
+### Setup
 
 ```bash
-cp .env.example .env
-```
+# Clone
+git clone https://github.com/fcarvalho-dev/spamurai.git
+cd spamurai
 
-Preencher obrigatoriamente:
-- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` — [Google Cloud Console](https://console.cloud.google.com/)
-- `ANTHROPIC_API_KEY` — [console.anthropic.com](https://console.anthropic.com/)
-- `TOKEN_ENCRYPTION_KEY` — `openssl rand -hex 32`
-- `APP_SECRET_KEY` — `openssl rand -hex 32`
-
-### 3. Google OAuth setup
-
-No Google Cloud Console:
-1. Criar projeto
-2. Ativar **Gmail API**
-3. Configurar OAuth consent screen (External)
-4. Criar credenciais OAuth 2.0 (Web application)
-5. Adicionar redirect URI: `http://localhost:8000/auth/callback`
-6. **Scopes necessários:** `gmail.modify` — NÃO solicitar `mail.google.com`
-
-### 4. Infraestrutura local
-
-```bash
+# Start infrastructure
 docker-compose up -d
-```
 
-### 5. Backend
-
-```bash
+# Backend
 cd backend
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+.venv/Scripts/activate  # Windows
 pip install -r requirements.txt
+cp .env.example .env    # Fill in your credentials
+python migrate.py
+uvicorn main:app --port 8000
 
-# API
-uvicorn main:app --reload --port 8000
+# Celery worker (new terminal)
+celery -A workers.scraper.celery_app worker --loglevel=info --pool=solo
 
-# Worker Celery (terminal separado)
-celery -A workers.scraper.celery_app worker --loglevel=info
-```
-
-### 6. Frontend
-
-```bash
+# Frontend (new terminal)
 cd frontend
 bun install
 bun dev
 ```
 
-Acesse: http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000)
 
-## Segurança
+---
 
-- Refresh tokens armazenados com AES-256-GCM
-- OAuth scope mínimo: `gmail.modify`
-- CSRF protection via state parameter
-- Proteção SSRF no unsubscribe
-- Audit log de todas as ações destrutivas
-- Rate limiting nas rotas de ação
-- Dry-run obrigatório antes de qualquer delete
+## Environment Variables
 
-## Comandos úteis
+Copy `.env.example` to `.env` and fill in the values:
 
 ```bash
-# Gerar chave de criptografia
-openssl rand -hex 32
-
-# Lint Python
-cd backend && ruff check . && ruff format --check .
-
-# Lint + Format JS
-cd frontend && bun run check
-
-# Testes
-cd backend && pytest
-cd frontend && bun test
-
-# Auditoria de segurança
-cd backend && pip-audit -r requirements.txt
-cd frontend && bun audit
+cp backend/.env.example backend/.env
 ```
+
+See [`.env.example`](backend/.env.example) for all required variables.
+
+---
+
+## Project Structure
+
+```
+spamurai/
+├── backend/
+│   ├── core/           # Config, security, plan system
+│   ├── models/         # SQLAlchemy schema
+│   ├── routers/        # FastAPI endpoints
+│   │   ├── auth.py     # Google OAuth2 flow
+│   │   ├── gmail.py    # Gmail API operations
+│   │   ├── ai_chat.py  # Kenzo AI with function calling
+│   │   ├── rules.py    # Auto rules CRUD
+│   │   └── plans.py    # Plan management
+│   ├── services/       # AI and Gmail service wrappers
+│   ├── workers/        # Celery async tasks
+│   └── main.py         # FastAPI app + middleware
+└── frontend/
+    ├── app/            # Next.js App Router
+    │   └── dashboard/  # Dashboard, trash, settings
+    ├── components/     # UI components
+    │   └── dashboard/  # Stats, table, AI chat, header
+    └── lib/            # API client, types, hooks
+```
+
+---
+
+## Author
+
+**Felipe Carvalho** — Fullstack Developer
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/felipe-santos-2389633b7/)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/fcarvalho-dev)
+
+---
+
+*Built as a portfolio project to demonstrate fullstack engineering across modern web, async processing, AI integration, and production-grade security practices.*

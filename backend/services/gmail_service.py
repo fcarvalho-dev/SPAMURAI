@@ -199,7 +199,7 @@ async def fetch_messages_metadata(
                 unsubscribe_url=unsub_url,
             ))
 
-        await asyncio.sleep(0.05)  # micro delay entre chunks
+        await asyncio.sleep(0.05)
 
     return results
 
@@ -263,6 +263,23 @@ async def move_to_label(access_token: str, message_ids: list[str], label_id: str
             gmail.users().messages().batchModify(
                 userId="me",
                 body={"ids": chunk, "addLabelIds": [label_id]},
+            ).execute
+        )
+        await asyncio.sleep(0.2)
+
+
+async def mark_read(access_token: str, message_ids: list[str]) -> None:
+    """Removes the UNREAD label from the given messages in batches."""
+    if not message_ids:
+        return
+    gmail = _build_gmail(access_token)
+    chunk_size = 1000
+    for i in range(0, len(message_ids), chunk_size):
+        chunk = message_ids[i:i+chunk_size]
+        await _rate_limited_call(
+            gmail.users().messages().batchModify(
+                userId="me",
+                body={"ids": chunk, "removeLabelIds": ["UNREAD"]},
             ).execute
         )
         await asyncio.sleep(0.2)

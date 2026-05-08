@@ -1,25 +1,48 @@
-from urllib.parse import urlencode
+import os
+import secrets
 
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
+import redis.asyncio as aioredis
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from core.config import get_settings
-from core.security import constant_time_compare, encrypt_token
+from core.security import encrypt_token
 
 logger = structlog.get_logger()
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Escopos mínimos necessários — principle of least privilege
+_STATE_TTL = 600  # 10 minutes
+
+
+def _redis() -> aioredis.Redis:
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
+
+
+async def _store_state(state: str) -> None:
+    async with _redis() as r:
+        await r.setex(f"oauth_state:{state}", _STATE_TTL, "1")
+
+
+async def _consume_state(state: str) -> bool:
+    async with _redis() as r:
+        key = f"oauth_state:{state}"
+        exists = await r.exists(key)
+        if exists:
+            await r.delete(key)
+            return True
+        return False
+
+
 SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/gmail.modify",  # lê + labela + move + trash
-    # NÃO incluir: https://mail.google.com/ (full access — desnecessário)
+    "https://mail.google.com/",
 ]
 
 
@@ -40,20 +63,17 @@ def _build_flow() -> Flow:
 
 
 @router.get("/login")
-async def login(request: Request):
-    """Inicia fluxo OAuth2. State gerado server-side e salvo na sessão."""
-    import secrets
-
+async def login():
+    """Inicia fluxo OAuth2. State persistido no Redis — não depende de cookie."""
     flow = _build_flow()
     state = secrets.token_urlsafe(32)
 
-    # State salvo na sessão httpOnly — protege contra CSRF
-    request.session["oauth_state"] = state
+    await _store_state(state)
 
     auth_url, _ = flow.authorization_url(
         state=state,
-        access_type="offline",     # recebe refresh_token
-        prompt="consent",           # força exibição de escopos ao usuário
+        access_type="offline",
+        prompt="consent",
         include_granted_scopes="true",
     )
 
@@ -66,47 +86,67 @@ async def callback(request: Request, code: str, state: str):
     Callback OAuth2.
     Valida state para prevenir CSRF antes de qualquer processamento.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy import select
     from models.schema import User
 
-    # Valida state — timing-safe comparison
-    session_state = request.session.get("oauth_state")
-    if not session_state or not constant_time_compare(state, session_state):
+    if not await _consume_state(state):
         logger.warning("oauth_state_mismatch", remote_addr=request.client.host)
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
-    # Limpa state da sessão após uso — não pode ser reusado
-    del request.session["oauth_state"]
-
     flow = _build_flow()
 
-    try:
-        flow.fetch_token(code=code)
-    except Exception:
-        logger.error("oauth_token_fetch_failed")
-        raise HTTPException(status_code=400, detail="Failed to fetch token")
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            flow.fetch_token(code=code)
+        except Exception as e:
+            if "Scope has changed" in str(e):
+                pass
+            else:
+                logger.error("oauth_token_fetch_failed", error=str(e))
+                raise HTTPException(
+                    status_code=400, detail="Falha ao autenticar com Google. Tente novamente."
+                )
 
-    credentials = flow.credentials
+    try:
+        credentials = flow.credentials
+    except ValueError:
+        # Token not saved by the flow — reconstruct from oauth2session
+        if hasattr(flow, "oauth2session") and flow.oauth2session.token:
+            from google.oauth2.credentials import Credentials
+
+            token = flow.oauth2session.token
+            credentials = Credentials(
+                token=token.get("access_token"),
+                refresh_token=token.get("refresh_token"),
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=settings.google_client_id,
+                client_secret=settings.google_client_secret,
+                scopes=token.get("scope", "").split() if isinstance(token.get("scope"), str) else token.get("scope", []),
+            )
+        else:
+            raise HTTPException(
+                status_code=400, detail="Falha ao obter credenciais do Google."
+            )
 
     if not credentials.refresh_token:
-        # Acontece se o usuário já autorizou antes — força revoke + re-auth
+        # User previously authorized — force revoke + re-auth to get a fresh refresh token
         logger.warning("oauth_no_refresh_token")
         raise HTTPException(
             status_code=400,
             detail="No refresh token received. Please revoke access and try again.",
         )
 
-    # Busca info do usuário
     from googleapiclient.discovery import build
     service = build("oauth2", "v2", credentials=credentials)
     user_info = service.userinfo().get().execute()
     email = user_info["email"]
+    name = user_info.get("name")
+    picture_url = user_info.get("picture")
 
-    # Armazena refresh token CRIPTOGRAFADO
     encrypted_rt = encrypt_token(credentials.refresh_token)
 
-    # Upsert do usuário no banco
     async with request.app.state.db_session() as session:
         result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
@@ -114,14 +154,16 @@ async def callback(request: Request, code: str, state: str):
         if user:
             user.encrypted_refresh_token = encrypted_rt
             user.last_seen_at = __import__("datetime").datetime.utcnow()
+            user.name = name
+            user.picture_url = picture_url
         else:
-            user = User(email=email, encrypted_refresh_token=encrypted_rt)
+            user = User(email=email, encrypted_refresh_token=encrypted_rt, name=name, picture_url=picture_url)
             session.add(user)
 
         await session.commit()
         await session.refresh(user)
 
-    # Salva user_id na sessão — NOT o token
+    # Store user_id in session — never the token
     request.session["user_id"] = str(user.id)
     request.session["user_email"] = email
 
@@ -134,12 +176,37 @@ async def logout(request: Request):
     return {"ok": True}
 
 
+@router.get("/logout")
+async def logout_get(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
 @router.get("/me")
 async def me(request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    import uuid as _uuid
+    from sqlalchemy import select
+    from models.schema import User
+
+    async with request.app.state.db_session() as session:
+        result = await session.execute(
+            select(User).where(User.id == _uuid.UUID(user_id))
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
     return {
         "user_id": user_id,
-        "email": request.session.get("user_email"),
+        "email": user.email,
+        "name": user.name,
+        "picture_url": user.picture_url,
+        "plan": user.plan,
+        "billing_cycle": user.billing_cycle,
+        "plan_started_at": user.plan_started_at.isoformat() if user.plan_started_at else None,
+        "plan_expires_at": user.plan_expires_at.isoformat() if user.plan_expires_at else None,
     }

@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 
-import anthropic
+from groq import Groq
 import structlog
 
 from core.config import get_settings
@@ -9,7 +9,8 @@ from core.config import get_settings
 logger = structlog.get_logger()
 settings = get_settings()
 
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+# Groq client — reuses ANTHROPIC_API_KEY env var for backward compat
+client = Groq(api_key=settings.anthropic_api_key)
 
 CATEGORIES = {
     "streaming": "Netflix, Spotify, Prime, Disney+, etc.",
@@ -45,7 +46,6 @@ async def classify_senders(
     if not senders:
         return {}
 
-    # Manda só o mínimo necessário — não body de emails
     payload = [
         {
             "domain": s["domain"],
@@ -80,19 +80,19 @@ Retorne APENAS JSON válido, sem markdown, sem explicações:
 
 Regras:
 - financial e government são SEMPRE is_important: true
-- personal (emails de pessoas) são SEMPRE is_important: true  
+- personal (emails de pessoas) são SEMPRE is_important: true
 - spam: can_unsubscribe: true se parecer marketing, false se parecer phishing
 - suggested_folder: nome da pasta em português, null se não precisar de pasta"""
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=4000,
         )
-
-        text = response.content[0].text if response.content else ""
-        data = json.loads(text)
+        text = response.choices[0].message.content or ""
+        text_clean = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        data = json.loads(text_clean)
 
         result = {}
         for item in data.get("classifications", []):
@@ -110,8 +110,8 @@ Regras:
     except json.JSONDecodeError:
         logger.error("ai_classification_json_error")
         raise ValueError("AI returned invalid JSON")
-    except anthropic.APIError as e:
-        logger.error("ai_classification_api_error", status=e.status_code)
+    except Exception as e:
+        logger.error("ai_classification_api_error", error=str(e))
         raise
 
 
@@ -149,11 +149,11 @@ Retorne APENAS JSON válido:
   "summary": "Serão criadas X pastas, Y emails movidos, Z excluídos"
 }}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2000,
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
+        max_tokens=2000,
     )
-
-    text = response.content[0].text if response.content else ""
-    return json.loads(text)
+    text = response.choices[0].message.content or ""
+    text_clean = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    return json.loads(text_clean)

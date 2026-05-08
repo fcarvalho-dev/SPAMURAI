@@ -1,4 +1,3 @@
-import secrets
 from functools import lru_cache
 
 from pydantic import field_validator, model_validator
@@ -8,32 +7,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Google OAuth
     google_client_id: str
     google_client_secret: str
     google_redirect_uri: str
 
-    # Anthropic
     anthropic_api_key: str
 
-    # Encryption — AES-256-GCM
+    # AES-256-GCM key — 64 hex chars (32 bytes)
     token_encryption_key: str
 
-    # Database
     database_url: str
 
-    # Redis
     redis_url: str
     celery_broker_url: str
     celery_result_backend: str
 
-    # App
     app_env: str = "development"
     app_secret_key: str
     frontend_url: str = "http://localhost:3000"
+    frontend_url_alt: str = "http://localhost:3001"
     backend_url: str = "http://localhost:8000"
 
-    # Rate limits
     gmail_requests_per_second: int = 10
     max_emails_per_scan: int = 5000
 
@@ -46,7 +40,6 @@ class Settings(BaseSettings):
             bytes.fromhex(v)
         except ValueError:
             raise ValueError("TOKEN_ENCRYPTION_KEY must be valid hex")
-        # Detecta chave placeholder/baixa entropia
         if len(set(v)) < 10:
             raise ValueError("TOKEN_ENCRYPTION_KEY has insufficient entropy")
         return v
