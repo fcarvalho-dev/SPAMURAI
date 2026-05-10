@@ -5,6 +5,7 @@ from core.config import get_settings
 
 settings = get_settings()
 
+
 async def migrate():
     engine = create_async_engine(settings.database_url)
     async with engine.begin() as conn:
@@ -25,5 +26,6 @@ async def migrate():
             print(f"OK: {sql[:80]}")
     await engine.dispose()
     print("\nMigration concluida!")
+
 
 asyncio.run(migrate())

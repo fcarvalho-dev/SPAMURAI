@@ -96,6 +96,7 @@ async def callback(request: Request, code: str, state: str):
     flow = _build_flow()
 
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
@@ -123,12 +124,12 @@ async def callback(request: Request, code: str, state: str):
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=settings.google_client_id,
                 client_secret=settings.google_client_secret,
-                scopes=token.get("scope", "").split() if isinstance(token.get("scope"), str) else token.get("scope", []),
+                scopes=token.get("scope", "").split()
+                if isinstance(token.get("scope"), str)
+                else token.get("scope", []),
             )
         else:
-            raise HTTPException(
-                status_code=400, detail="Falha ao obter credenciais do Google."
-            )
+            raise HTTPException(status_code=400, detail="Falha ao obter credenciais do Google.")
 
     if not credentials.refresh_token:
         # User previously authorized — force revoke + re-auth to get a fresh refresh token
@@ -139,6 +140,7 @@ async def callback(request: Request, code: str, state: str):
         )
 
     from googleapiclient.discovery import build
+
     service = build("oauth2", "v2", credentials=credentials)
     user_info = service.userinfo().get().execute()
     email = user_info["email"]
@@ -157,7 +159,12 @@ async def callback(request: Request, code: str, state: str):
             user.name = name
             user.picture_url = picture_url
         else:
-            user = User(email=email, encrypted_refresh_token=encrypted_rt, name=name, picture_url=picture_url)
+            user = User(
+                email=email,
+                encrypted_refresh_token=encrypted_rt,
+                name=name,
+                picture_url=picture_url,
+            )
             session.add(user)
 
         await session.commit()
@@ -193,9 +200,7 @@ async def me(request: Request):
     from models.schema import User
 
     async with request.app.state.db_session() as session:
-        result = await session.execute(
-            select(User).where(User.id == _uuid.UUID(user_id))
-        )
+        result = await session.execute(select(User).where(User.id == _uuid.UUID(user_id)))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=401, detail="Not authenticated")

@@ -17,13 +17,19 @@ async def get_current_plan(
     return {
         "plan": current_user.plan,
         "billing_cycle": current_user.billing_cycle,
-        "plan_started_at": current_user.plan_started_at.isoformat() if current_user.plan_started_at else None,
-        "plan_expires_at": current_user.plan_expires_at.isoformat() if current_user.plan_expires_at else None,
+        "plan_started_at": current_user.plan_started_at.isoformat()
+        if current_user.plan_started_at
+        else None,
+        "plan_expires_at": current_user.plan_expires_at.isoformat()
+        if current_user.plan_expires_at
+        else None,
         "features": PLAN_FEATURES[current_user.plan],
         "usage": {
             "deletions_this_month": current_user.deletions_this_month if is_free else None,
             "deletions_limit": FREE_DELETION_LIMIT if is_free else None,
-            "deletions_reset_at": current_user.deletions_month_reset.isoformat() if current_user.deletions_month_reset else None,
+            "deletions_reset_at": current_user.deletions_month_reset.isoformat()
+            if current_user.deletions_month_reset
+            else None,
         },
     }
 

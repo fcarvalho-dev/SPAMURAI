@@ -61,6 +61,7 @@ def _extract_unsubscribe(headers: list[dict]) -> tuple[bool, str | None]:
             value = h["value"]
             # Prefere HTTPS sobre mailto
             import re
+
             urls = re.findall(r"<(https?://[^>]+)>", value)
             if urls:
                 return True, urls[0]
@@ -104,9 +105,7 @@ async def paginate_all_messages(
             params["pageToken"] = page_token
 
         try:
-            result = await _rate_limited_call(
-                gmail.users().messages().list(**params).execute
-            )
+            result = await _rate_limited_call(gmail.users().messages().list(**params).execute)
         except HttpError as e:
             logger.error("gmail_list_failed", status=e.status_code)
             raise
@@ -145,7 +144,7 @@ async def fetch_messages_metadata(
 
     # Gmail batch: máx 100 por HTTP request
     chunk_size = 100
-    chunks = [message_ids[i:i+chunk_size] for i in range(0, len(message_ids), chunk_size)]
+    chunks = [message_ids[i : i + chunk_size] for i in range(0, len(message_ids), chunk_size)]
 
     for chunk in chunks:
         batch_results = []
@@ -159,7 +158,9 @@ async def fetch_messages_metadata(
         batch = gmail.new_batch_http_request(callback=callback)
         for msg_id in chunk:
             batch.add(
-                gmail.users().messages().get(
+                gmail.users()
+                .messages()
+                .get(
                     userId="me",
                     id=msg_id,
                     format="metadata",
@@ -178,26 +179,31 @@ async def fetch_messages_metadata(
 
             try:
                 from email.utils import parsedate_to_datetime
+
                 date = parsedate_to_datetime(header_map.get("date", ""))
             except Exception:
                 date = datetime.utcnow()
 
-            results.append(EmailMeta(
-                id=msg["id"],
-                sender=sender,
-                sender_domain=_parse_sender_domain(sender),
-                subject=header_map.get("subject", "(sem assunto)"),
-                date=date.replace(tzinfo=None),
-                is_read="UNREAD" not in msg.get("labelIds", []),
-                gmail_category=next(
-                    (l.lower().replace("category_", "")
-                     for l in msg.get("labelIds", [])
-                     if l.startswith("CATEGORY_")),
-                    None,
-                ),
-                has_unsubscribe=has_unsub,
-                unsubscribe_url=unsub_url,
-            ))
+            results.append(
+                EmailMeta(
+                    id=msg["id"],
+                    sender=sender,
+                    sender_domain=_parse_sender_domain(sender),
+                    subject=header_map.get("subject", "(sem assunto)"),
+                    date=date.replace(tzinfo=None),
+                    is_read="UNREAD" not in msg.get("labelIds", []),
+                    gmail_category=next(
+                        (
+                            l.lower().replace("category_", "")
+                            for l in msg.get("labelIds", [])
+                            if l.startswith("CATEGORY_")
+                        ),
+                        None,
+                    ),
+                    has_unsubscribe=has_unsub,
+                    unsubscribe_url=unsub_url,
+                )
+            )
 
         await asyncio.sleep(0.05)
 
@@ -226,12 +232,15 @@ async def bulk_delete_by_query(
     chunk_size = 1000  # batchDelete aceita até 1000
 
     for i in range(0, len(ids), chunk_size):
-        chunk = ids[i:i+chunk_size]
+        chunk = ids[i : i + chunk_size]
         await _rate_limited_call(
-            gmail.users().messages().batchModify(
+            gmail.users()
+            .messages()
+            .batchModify(
                 userId="me",
                 body={"ids": chunk, "addLabelIds": ["TRASH"]},
-            ).execute
+            )
+            .execute
         )
         await asyncio.sleep(0.2)
 
@@ -246,9 +255,7 @@ async def create_label(access_token: str, name: str, color: str | None = None) -
     if color:
         body["color"] = {"backgroundColor": color, "textColor": "#ffffff"}
 
-    result = await _rate_limited_call(
-        gmail.users().labels().create(userId="me", body=body).execute
-    )
+    result = await _rate_limited_call(gmail.users().labels().create(userId="me", body=body).execute)
     return result["id"]
 
 
@@ -258,12 +265,15 @@ async def move_to_label(access_token: str, message_ids: list[str], label_id: str
     chunk_size = 1000
 
     for i in range(0, len(message_ids), chunk_size):
-        chunk = message_ids[i:i+chunk_size]
+        chunk = message_ids[i : i + chunk_size]
         await _rate_limited_call(
-            gmail.users().messages().batchModify(
+            gmail.users()
+            .messages()
+            .batchModify(
                 userId="me",
                 body={"ids": chunk, "addLabelIds": [label_id]},
-            ).execute
+            )
+            .execute
         )
         await asyncio.sleep(0.2)
 
@@ -275,12 +285,14 @@ async def mark_read(access_token: str, message_ids: list[str]) -> None:
     gmail = _build_gmail(access_token)
     chunk_size = 1000
     for i in range(0, len(message_ids), chunk_size):
-        chunk = message_ids[i:i+chunk_size]
+        chunk = message_ids[i : i + chunk_size]
         await _rate_limited_call(
-            gmail.users().messages().batchModify(
+            gmail.users()
+            .messages()
+            .batchModify(
                 userId="me",
                 body={"ids": chunk, "removeLabelIds": ["UNREAD"]},
-            ).execute
+            )
+            .execute
         )
         await asyncio.sleep(0.2)
-

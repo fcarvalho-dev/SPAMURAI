@@ -9,6 +9,7 @@ from routers.gmail import get_current_user, get_current_user_and_token
 logger = structlog.get_logger()
 router = APIRouter()
 
+
 class CreateRuleRequest(BaseModel):
     name: str
     condition_type: str
@@ -22,12 +23,10 @@ async def list_rules(request: Request, auth=Depends(get_current_user_and_token))
     user_id = auth["user_id"]
     async with request.app.state.db_session() as session:
         result = await session.execute(
-            select(AutoRule)
-            .where(AutoRule.user_id == user_id)
-            .order_by(AutoRule.created_at.desc())
+            select(AutoRule).where(AutoRule.user_id == user_id).order_by(AutoRule.created_at.desc())
         )
         rules = result.scalars().all()
-        
+
     return [
         {
             "id": str(r.id),
@@ -76,7 +75,7 @@ async def delete_rule(rule_id: str, request: Request, auth=Depends(get_current_u
         rule = result.scalar_one_or_none()
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
-            
+
         await session.delete(rule)
         await session.commit()
     return {"status": "success"}
@@ -92,8 +91,8 @@ async def toggle_rule(rule_id: str, request: Request, auth=Depends(get_current_u
         rule = result.scalar_one_or_none()
         if not rule:
             raise HTTPException(status_code=404, detail="Rule not found")
-            
+
         rule.is_active = not rule.is_active
         await session.commit()
-        
+
     return {"status": "success", "is_active": rule.is_active}

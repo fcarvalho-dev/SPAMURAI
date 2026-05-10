@@ -46,6 +46,7 @@ app.add_middleware(
 
 if settings.is_production:
     from urllib.parse import urlparse
+
     allowed_hosts = [urlparse(settings.backend_url).hostname]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
@@ -74,6 +75,7 @@ async def startup():
     app.state.db_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     from models.schema import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

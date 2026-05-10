@@ -44,6 +44,7 @@ def has_feature(plan: PlanType, feature: str) -> bool:
 
 def require_feature(plan: PlanType, feature: str) -> None:
     from fastapi import HTTPException
+
     if not has_feature(plan, feature):
         raise HTTPException(
             status_code=403,

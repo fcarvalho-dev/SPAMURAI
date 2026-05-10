@@ -23,7 +23,7 @@ celery_app.conf.update(
     accept_content=["json"],
     result_serializer="json",
     timezone="UTC",
-    task_acks_late=True,           # reprocess on crash
+    task_acks_late=True,  # reprocess on crash
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,  # one heavy job per worker
     task_soft_time_limit=3600,
@@ -81,7 +81,7 @@ async def _scan_inbox_async(task, user_id: str, encrypted_token: str, scan_job_i
 
         # Process in chunks to bound memory usage
         chunk_size = 200
-        chunks = [messages[i:i+chunk_size] for i in range(0, len(messages), chunk_size)]
+        chunks = [messages[i : i + chunk_size] for i in range(0, len(messages), chunk_size)]
 
         async with async_session() as session:
             for chunk in chunks:
@@ -95,7 +95,9 @@ async def _scan_inbox_async(task, user_id: str, encrypted_token: str, scan_job_i
             await session.commit()
 
         await _update_scan_status(
-            async_session, scan_job_id, "done",
+            async_session,
+            scan_job_id,
+            "done",
             total_indexed=indexed,
             completed_at=datetime.utcnow(),
         )
@@ -130,9 +132,13 @@ async def _upsert_email_metadata(session, user_id: str, metas):
         for m in metas
     ]
 
-    stmt = insert(EmailMetadata).values(rows).on_conflict_do_update(
-        index_elements=["id"],
-        set_={"is_read": insert(EmailMetadata).excluded.is_read},
+    stmt = (
+        insert(EmailMetadata)
+        .values(rows)
+        .on_conflict_do_update(
+            index_elements=["id"],
+            set_={"is_read": insert(EmailMetadata).excluded.is_read},
+        )
     )
     await session.execute(stmt)
 
@@ -141,7 +147,8 @@ async def _refresh_sender_summary(session, user_id: str):
     """Recalcula agregações por remetente a partir do cache local."""
     from sqlalchemy import text
 
-    await session.execute(text("""
+    await session.execute(
+        text("""
         INSERT INTO sender_summary (user_id, sender_domain, total_count, unread_count, oldest_email, newest_email, has_unsubscribe, updated_at)
         SELECT
             user_id,
@@ -162,7 +169,9 @@ async def _refresh_sender_summary(session, user_id: str):
             newest_email = EXCLUDED.newest_email,
             has_unsubscribe = EXCLUDED.has_unsubscribe,
             updated_at = NOW()
-    """), {"user_id": user_id})
+    """),
+        {"user_id": user_id},
+    )
 
 
 async def _update_scan_status(session_factory, scan_job_id: str, status: str, **kwargs):
@@ -170,11 +179,7 @@ async def _update_scan_status(session_factory, scan_job_id: str, status: str, **
     from sqlalchemy import update
 
     async with session_factory() as session:
-        stmt = (
-            update(ScanJob)
-            .where(ScanJob.id == scan_job_id)
-            .values(status=status, **kwargs)
-        )
+        stmt = update(ScanJob).where(ScanJob.id == scan_job_id).values(status=status, **kwargs)
         await session.execute(stmt)
         await session.commit()
 
@@ -198,9 +203,14 @@ async def _apply_auto_rules_async(target_user_id: str = None):
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
-        query = select(AutoRule, User).join(User, AutoRule.user_id == User.id).where(AutoRule.is_active == True)
+        query = (
+            select(AutoRule, User)
+            .join(User, AutoRule.user_id == User.id)
+            .where(AutoRule.is_active == True)
+        )
         if target_user_id:
             import uuid
+
             try:
                 target_uuid = uuid.UUID(target_user_id)
                 query = query.where(AutoRule.user_id == target_uuid)
@@ -259,24 +269,33 @@ async def _apply_auto_rules_async(target_user_id: str = None):
                         dry_run=False,
                     )
                     affected_count = res.get("affected", 0)
-                    logger.info("rule_applied_trash", rule_id=str(rule.id), user_id=str(user_id), query=gmail_query)
+                    logger.info(
+                        "rule_applied_trash",
+                        rule_id=str(rule.id),
+                        user_id=str(user_id),
+                        query=gmail_query,
+                    )
                 elif rule.action_type == "mark_read":
                     logger.warning("mark_read_rule_not_implemented", rule_id=str(rule.id))
                 else:
-                    logger.warning("rule_action_not_supported", rule_id=str(rule.id), action=rule.action_type)
+                    logger.warning(
+                        "rule_action_not_supported", rule_id=str(rule.id), action=rule.action_type
+                    )
 
                 async with async_session() as session:
-                    session.add(ActionLog(
-                        user_id=user_id,
-                        action_type=f"auto_rule_{rule.action_type}",
-                        target=rule.name,
-                        gmail_query=gmail_query,
-                        affected_count=affected_count,
-                        status="done",
-                        dry_run=False,
-                        confirmed_at=datetime.utcnow(),
-                        completed_at=datetime.utcnow(),
-                    ))
+                    session.add(
+                        ActionLog(
+                            user_id=user_id,
+                            action_type=f"auto_rule_{rule.action_type}",
+                            target=rule.name,
+                            gmail_query=gmail_query,
+                            affected_count=affected_count,
+                            status="done",
+                            dry_run=False,
+                            confirmed_at=datetime.utcnow(),
+                            completed_at=datetime.utcnow(),
+                        )
+                    )
                     await session.execute(
                         update(AutoRule)
                         .where(AutoRule.id == rule.id)

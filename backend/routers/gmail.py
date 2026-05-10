@@ -27,6 +27,7 @@ class BulkDeleteRequest(BaseModel):
     @classmethod
     def validate_domain(cls, v: str) -> str:
         import re
+
         if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$", v):
             raise ValueError("Invalid domain format")
         return v.lower()
@@ -441,7 +442,9 @@ async def get_emails_by_domain(
 
     async with request.app.state.db_session() as session:
         total_result = await session.execute(
-            select(func.count()).select_from(EmailMetadata).where(
+            select(func.count())
+            .select_from(EmailMetadata)
+            .where(
                 EmailMetadata.user_id == user_id,
                 EmailMetadata.sender_domain == domain_lower,
             )
@@ -476,7 +479,9 @@ async def get_emails_by_domain(
 
 
 @router.get("/email/{message_id}", response_model=EmailDetailResponse)
-async def get_email_by_id(message_id: str, request: Request, auth=Depends(get_current_user_and_token)) -> EmailDetailResponse:
+async def get_email_by_id(
+    message_id: str, request: Request, auth=Depends(get_current_user_and_token)
+) -> EmailDetailResponse:
     user_id = auth["user_id"]
 
     async with request.app.state.db_session() as session:
@@ -586,7 +591,9 @@ async def get_email_by_id(message_id: str, request: Request, auth=Depends(get_cu
 
 
 @router.post("/unsubscribe/{domain}")
-async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_current_user_and_token)):
+async def unsubscribe_domain(
+    domain: str, request: Request, auth=Depends(get_current_user_and_token)
+):
     """
     Attempts to unsubscribe from a sender domain.
     - If unsubscribe_url stored and starts with http: perform POST to that URL (SSRF-guarded)
@@ -597,6 +604,7 @@ async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_cur
     access_token = auth["access_token"]
 
     import re
+
     if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$", domain):
         raise HTTPException(status_code=422, detail="Invalid domain format")
 
@@ -616,17 +624,21 @@ async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_cur
 
     if not email:
         async with request.app.state.db_session() as session:
-            session.add(ActionLog(
-                user_id=user_id,
-                action_type="unsubscribe",
-                target=domain_lower,
-                gmail_query=None,
-                affected_count=0,
-                status="done",
-                dry_run=True,
-            ))
+            session.add(
+                ActionLog(
+                    user_id=user_id,
+                    action_type="unsubscribe",
+                    target=domain_lower,
+                    gmail_query=None,
+                    affected_count=0,
+                    status="done",
+                    dry_run=True,
+                )
+            )
             await session.commit()
-        raise HTTPException(status_code=404, detail="No unsubscribe information found for this domain")
+        raise HTTPException(
+            status_code=404, detail="No unsubscribe information found for this domain"
+        )
 
     unsub_url = email.unsubscribe_url
     if not unsub_url:
@@ -649,6 +661,7 @@ async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_cur
     try:
         if unsub_url.lower().startswith("http://") or unsub_url.lower().startswith("https://"):
             from core.security import safe_unsubscribe
+
             ok = await safe_unsubscribe(unsub_url)
             status = "success" if ok else "failed"
 
@@ -663,7 +676,9 @@ async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_cur
 
             raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
             gmail = gmail_service._build_gmail(access_token)
-            await asyncio.to_thread(lambda: gmail.users().messages().send(userId="me", body={"raw": raw}).execute())
+            await asyncio.to_thread(
+                lambda: gmail.users().messages().send(userId="me", body={"raw": raw}).execute()
+            )
             status = "success"
 
         else:
@@ -672,12 +687,16 @@ async def unsubscribe_domain(domain: str, request: Request, auth=Depends(get_cur
         async with request.app.state.db_session() as session:
             await session.execute(
                 update(SenderSummary)
-                .where(SenderSummary.user_id == user_id, SenderSummary.sender_domain == domain_lower)
+                .where(
+                    SenderSummary.user_id == user_id, SenderSummary.sender_domain == domain_lower
+                )
                 .values(has_unsubscribe=True)
             )
             await session.execute(
                 update(EmailMetadata)
-                .where(EmailMetadata.user_id == user_id, EmailMetadata.sender_domain == domain_lower)
+                .where(
+                    EmailMetadata.user_id == user_id, EmailMetadata.sender_domain == domain_lower
+                )
                 .values(has_unsubscribe=True)
             )
             await session.execute(
@@ -708,6 +727,7 @@ async def mark_read_domain(domain: str, request: Request, auth=Depends(get_curre
     access_token = auth["access_token"]
 
     import re
+
     if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$", domain):
         raise HTTPException(status_code=422, detail="Invalid domain format")
 
@@ -715,8 +735,7 @@ async def mark_read_domain(domain: str, request: Request, auth=Depends(get_curre
 
     async with request.app.state.db_session() as session:
         result = await session.execute(
-            select(EmailMetadata.id)
-            .where(
+            select(EmailMetadata.id).where(
                 EmailMetadata.user_id == user_id,
                 EmailMetadata.sender_domain == domain_lower,
                 EmailMetadata.is_read == False,
@@ -739,7 +758,9 @@ async def mark_read_domain(domain: str, request: Request, auth=Depends(get_curre
             .values(is_read=True)
         )
         unread_result = await session.execute(
-            select(func.count()).select_from(EmailMetadata).where(
+            select(func.count())
+            .select_from(EmailMetadata)
+            .where(
                 EmailMetadata.user_id == user_id,
                 EmailMetadata.sender_domain == domain_lower,
                 EmailMetadata.is_read == False,
@@ -774,10 +795,12 @@ async def get_trash(
     maxreq = min(offset + limit, 500)
     try:
         result = await asyncio.to_thread(
-            lambda: gmail.users()
-            .messages()
-            .list(userId="me", labelIds=["TRASH"], maxResults=maxreq)
-            .execute()
+            lambda: (
+                gmail.users()
+                .messages()
+                .list(userId="me", labelIds=["TRASH"], maxResults=maxreq)
+                .execute()
+            )
         )
     except Exception as e:
         logger.error("gmail_list_trash_failed", error=str(e))
@@ -786,27 +809,31 @@ async def get_trash(
     messages = result.get("messages", []) or []
     total = result.get("resultSizeEstimate", 0)
 
-    paginated = messages[offset: offset + limit]
+    paginated = messages[offset : offset + limit]
 
     items: list[dict] = []
     for msg in paginated:
         try:
             meta = await asyncio.to_thread(
-                lambda mid=msg["id"]: gmail.users()
-                .messages()
-                .get(
-                    userId="me",
-                    id=mid,
-                    format="metadata",
-                    metadataHeaders=["From", "Subject", "Date"],
+                lambda mid=msg["id"]: (
+                    gmail.users()
+                    .messages()
+                    .get(
+                        userId="me",
+                        id=mid,
+                        format="metadata",
+                        metadataHeaders=["From", "Subject", "Date"],
+                    )
+                    .execute()
                 )
-                .execute()
             )
         except Exception as e:
             logger.warning("gmail_get_meta_failed", message_id=msg.get("id"), error=str(e))
             continue
 
-        headers = {h["name"].lower(): h["value"] for h in meta.get("payload", {}).get("headers", [])}
+        headers = {
+            h["name"].lower(): h["value"] for h in meta.get("payload", {}).get("headers", [])
+        }
         items.append(
             {
                 "message_id": msg["id"],
@@ -840,7 +867,9 @@ async def trash_count(request: Request, auth=Depends(get_current_user_and_token)
 
 
 @router.post("/restore/{message_id}")
-async def restore_message(message_id: str, request: Request, auth=Depends(get_current_user_and_token)):
+async def restore_message(
+    message_id: str, request: Request, auth=Depends(get_current_user_and_token)
+):
     """Restaura (untrash) mensagem específica."""
     user_id = request.session.get("user_id")
     if not user_id:
@@ -864,7 +893,9 @@ class EmptyTrashRequest(BaseModel):
 
 
 @router.post("/empty-trash")
-async def empty_trash(body: EmptyTrashRequest, request: Request, auth=Depends(get_current_user_and_token)):
+async def empty_trash(
+    body: EmptyTrashRequest, request: Request, auth=Depends(get_current_user_and_token)
+):
     """Esvazia a lixeira permanentemente. confirm=True é obrigatório."""
     user_id = auth["user_id"]
     access_token = auth["access_token"]
@@ -881,7 +912,9 @@ async def empty_trash(body: EmptyTrashRequest, request: Request, auth=Depends(ge
         if page_token:
             params["pageToken"] = page_token
         try:
-            res = await asyncio.to_thread(lambda p=params: gmail.users().messages().list(**p).execute())
+            res = await asyncio.to_thread(
+                lambda p=params: gmail.users().messages().list(**p).execute()
+            )
         except Exception as e:
             logger.error("gmail_list_trash_failed", error=str(e))
             raise HTTPException(status_code=502, detail="Failed to list trash messages")
@@ -911,19 +944,25 @@ async def empty_trash(body: EmptyTrashRequest, request: Request, auth=Depends(ge
 
     try:
         async with request.app.state.db_session() as session:
-            session.add(ActionLog(
-                user_id=user_id,
-                action_type="empty_trash",
-                target="trash",
-                gmail_query=None,
-                affected_count=deleted,
-                status="done",
-                dry_run=False,
-                confirmed_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
-            ))
+            session.add(
+                ActionLog(
+                    user_id=user_id,
+                    action_type="empty_trash",
+                    target="trash",
+                    gmail_query=None,
+                    affected_count=deleted,
+                    status="done",
+                    dry_run=False,
+                    confirmed_at=datetime.utcnow(),
+                    completed_at=datetime.utcnow(),
+                )
+            )
             if all_ids:
-                await session.execute(delete(EmailMetadata).where(EmailMetadata.user_id == user_id, EmailMetadata.id.in_(all_ids)))
+                await session.execute(
+                    delete(EmailMetadata).where(
+                        EmailMetadata.user_id == user_id, EmailMetadata.id.in_(all_ids)
+                    )
+                )
             await session.commit()
     except Exception:
         logger.warning("empty_trash_db_cleanup_failed")

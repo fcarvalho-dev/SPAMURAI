@@ -29,7 +29,9 @@ class SubscriptionOut(BaseModel):
 
 
 @router.get("/subscriptions", response_model=list[SubscriptionOut])
-async def list_subscriptions(request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)):
+async def list_subscriptions(
+    request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)
+):
     user_id = auth["user_id"]
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
 
@@ -52,7 +54,11 @@ async def list_subscriptions(request: Request, auth: dict[str, str] = Depends(ge
 
 
 @router.post("/subscriptions", response_model=SubscriptionOut)
-async def create_subscription(body: SubscriptionIn, request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)):
+async def create_subscription(
+    body: SubscriptionIn,
+    request: Request,
+    auth: dict[str, str] = Depends(get_current_user_and_token),
+):
     user_id = auth["user_id"]
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
 
@@ -83,13 +89,17 @@ async def create_subscription(body: SubscriptionIn, request: Request, auth: dict
 
 
 @router.delete("/subscriptions/{sub_id}")
-async def delete_subscription(sub_id: str, request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)):
+async def delete_subscription(
+    sub_id: str, request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)
+):
     user_id = auth["user_id"]
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
 
     sid = uuid_mod.UUID(sub_id) if isinstance(sub_id, str) else sub_id
     async with request.app.state.db_session() as session:
-        result = await session.execute(select(Subscription).where(Subscription.id == sid).where(Subscription.user_id == uid))
+        result = await session.execute(
+            select(Subscription).where(Subscription.id == sid).where(Subscription.user_id == uid)
+        )
         sub = result.scalar_one_or_none()
         if not sub:
             raise HTTPException(status_code=404, detail="subscription not found")
@@ -100,7 +110,9 @@ async def delete_subscription(sub_id: str, request: Request, auth: dict[str, str
 
 
 @router.get("/subscriptions/alerts")
-async def get_subscription_alerts(request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)) -> Any:
+async def get_subscription_alerts(
+    request: Request, auth: dict[str, str] = Depends(get_current_user_and_token)
+) -> Any:
     """Return simple alerts for subscriptions: unread count and newest email date from SenderSummary."""
     user_id = auth["user_id"]
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
@@ -113,7 +125,9 @@ async def get_subscription_alerts(request: Request, auth: dict[str, str] = Depen
             return {"alerts": []}
 
         domains = [s.sender_domain for s in subs]
-        senders_res = await session.execute(select(SenderSummary).where(SenderSummary.user_id == uid))
+        senders_res = await session.execute(
+            select(SenderSummary).where(SenderSummary.user_id == uid)
+        )
         senders = senders_res.scalars().all()
 
     senders_map = {s.sender_domain: s for s in senders}

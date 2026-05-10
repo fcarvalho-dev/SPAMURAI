@@ -19,6 +19,7 @@ def _get_key() -> bytes:
 def encrypt_token(token: str) -> str:
     """Encrypts OAuth token for storage. Returns base64(nonce + ciphertext + tag)."""
     import os
+
     aesgcm = AESGCM(_get_key())
     nonce = os.urandom(12)  # 96-bit nonce — GCM requirement
     ciphertext = aesgcm.encrypt(nonce, token.encode(), None)
@@ -63,6 +64,7 @@ async def safe_unsubscribe(url: str) -> bool:
     """
     try:
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
 
         if parsed.scheme not in ("http", "https"):
@@ -98,4 +100,5 @@ async def safe_unsubscribe(url: str) -> bool:
 def constant_time_compare(a: str, b: str) -> bool:
     """Timing-safe comparison — use for tokens and secrets to prevent timing attacks."""
     import hmac
+
     return hmac.compare_digest(a.encode(), b.encode())

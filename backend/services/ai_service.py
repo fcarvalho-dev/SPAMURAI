@@ -91,7 +91,9 @@ Regras:
             max_tokens=4000,
         )
         text = response.choices[0].message.content or ""
-        text_clean = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        text_clean = (
+            text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        )
         data = json.loads(text_clean)
 
         result = {}
@@ -155,5 +157,7 @@ Retorne APENAS JSON válido:
         max_tokens=2000,
     )
     text = response.choices[0].message.content or ""
-    text_clean = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    text_clean = (
+        text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    )
     return json.loads(text_clean)

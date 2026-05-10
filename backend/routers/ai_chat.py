@@ -45,8 +45,15 @@ TOOLS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "domain": {"type": "string", "description": "domínio do remetente ex: netflix.com"},
-                    "limit": {"type": "integer", "description": "máximo de emails a retornar", "default": 5},
+                    "domain": {
+                        "type": "string",
+                        "description": "domínio do remetente ex: netflix.com",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "máximo de emails a retornar",
+                        "default": 5,
+                    },
                 },
                 "required": ["domain"],
             },
@@ -64,7 +71,10 @@ TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "domain": {"type": "string", "description": "domínio do remetente"},
-                    "confirm": {"type": "boolean", "description": "false=preview, true=executar de verdade"},
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "false=preview, true=executar de verdade",
+                    },
                 },
                 "required": ["domain", "confirm"],
             },
@@ -81,8 +91,16 @@ TOOLS: list[dict[str, Any]] = [
                     "category": {
                         "type": "string",
                         "enum": [
-                            "spam", "newsletter", "streaming", "social", "financial",
-                            "ecommerce", "transactional", "personal", "entertainment", "other",
+                            "spam",
+                            "newsletter",
+                            "streaming",
+                            "social",
+                            "financial",
+                            "ecommerce",
+                            "transactional",
+                            "personal",
+                            "entertainment",
+                            "other",
                         ],
                     },
                 },
@@ -169,7 +187,10 @@ TOOLS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "domain": {"type": "string", "description": "domínio exato do remetente, ex: amazon.com.br"},
+                    "domain": {
+                        "type": "string",
+                        "description": "domínio exato do remetente, ex: amazon.com.br",
+                    },
                 },
                 "required": ["domain"],
             },
@@ -189,8 +210,16 @@ TOOLS: list[dict[str, Any]] = [
                     "category": {
                         "type": "string",
                         "enum": [
-                            "spam", "newsletter", "streaming", "social", "financial",
-                            "ecommerce", "transactional", "personal", "entertainment", "other",
+                            "spam",
+                            "newsletter",
+                            "streaming",
+                            "social",
+                            "financial",
+                            "ecommerce",
+                            "transactional",
+                            "personal",
+                            "entertainment",
+                            "other",
                         ],
                         "description": "categoria para filtrar na tabela",
                     },
@@ -225,9 +254,7 @@ async def execute_list_emails_by_sender(
     return {"emails": emails, "domain": domain, "count": len(emails)}
 
 
-async def execute_list_by_category(
-    category: str, user_id: str, db: AsyncSession
-) -> dict[str, Any]:
+async def execute_list_by_category(category: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
     result = await db.execute(
         select(
@@ -247,9 +274,7 @@ async def execute_list_by_category(
     return {"senders": senders_out, "category": category, "count": len(senders_out)}
 
 
-async def execute_search_by_keyword(
-    keyword: str, user_id: str, db: AsyncSession
-) -> dict[str, Any]:
+async def execute_search_by_keyword(keyword: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
     q = f"%{keyword}%"
     result = await db.execute(
@@ -285,7 +310,12 @@ async def execute_get_inbox_summary(user_id: str, db: AsyncSession) -> dict[str,
         for r in sorted(rows, key=lambda x: x.total_count, reverse=True)[:10]
     ]
     cats = Counter(r.ai_category for r in rows)
-    return {"total_emails": total, "senders": len(rows), "top_senders": top, "categories": dict(cats)}
+    return {
+        "total_emails": total,
+        "senders": len(rows),
+        "top_senders": top,
+        "categories": dict(cats),
+    }
 
 
 async def execute_move_to_trash(
@@ -352,13 +382,20 @@ async def execute_list_subscriptions(user_id: str, db: AsyncSession) -> dict[str
     result = await db.execute(select(Subscription).where(Subscription.user_id == uid))
     rows = result.scalars().all()
     out = [
-        {"id": str(r.id), "domain": r.sender_domain, "display_name": r.display_name, "is_active": bool(r.is_active)}
+        {
+            "id": str(r.id),
+            "domain": r.sender_domain,
+            "display_name": r.display_name,
+            "is_active": bool(r.is_active),
+        }
         for r in rows
     ]
     return {"subscriptions": out, "count": len(out)}
 
 
-async def execute_add_subscription(sender_domain: str, display_name: str | None, user_id: str, db: AsyncSession) -> dict[str, Any]:
+async def execute_add_subscription(
+    sender_domain: str, display_name: str | None, user_id: str, db: AsyncSession
+) -> dict[str, Any]:
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
     sub = Subscription(user_id=uid, sender_domain=sender_domain.lower(), display_name=display_name)
     db.add(sub)
@@ -381,19 +418,25 @@ async def execute_get_subscription_alerts(user_id: str, db: AsyncSession) -> dic
     alerts = []
     for s in subs:
         info = senders_map.get(s.sender_domain)
-        alerts.append({
-            "subscription_id": str(s.id),
-            "domain": s.sender_domain,
-            "total": info.total_count if info else 0,
-            "unread": info.unread_count if info else 0,
-        })
+        alerts.append(
+            {
+                "subscription_id": str(s.id),
+                "domain": s.sender_domain,
+                "total": info.total_count if info else 0,
+                "unread": info.unread_count if info else 0,
+            }
+        )
     return {"alerts": alerts}
 
 
-async def execute_delete_subscription(sub_id: str, user_id: str, db: AsyncSession) -> dict[str, Any]:
+async def execute_delete_subscription(
+    sub_id: str, user_id: str, db: AsyncSession
+) -> dict[str, Any]:
     sid = uuid_mod.UUID(sub_id) if isinstance(sub_id, str) else sub_id
     uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
-    res = await db.execute(select(Subscription).where(Subscription.id == sid).where(Subscription.user_id == uid))
+    res = await db.execute(
+        select(Subscription).where(Subscription.id == sid).where(Subscription.user_id == uid)
+    )
     sub = res.scalar_one_or_none()
     if not sub:
         return {"error": "not_found"}
@@ -482,9 +525,20 @@ async def chat_endpoint(
     messages.append({"role": "user", "content": body.message})
 
     OFF_SCOPE_KEYWORDS = [
-        "receita", "código", "programa", "calcul", "histór", "geograf",
-        "traduz", "escreva um texto", "me ajude com", "explique o que é",
-        "como funciona o", "o que é python", "javascript", "matemática"
+        "receita",
+        "código",
+        "programa",
+        "calcul",
+        "histór",
+        "geograf",
+        "traduz",
+        "escreva um texto",
+        "me ajude com",
+        "explique o que é",
+        "como funciona o",
+        "o que é python",
+        "javascript",
+        "matemática",
     ]
     if any(kw in body.message.lower() for kw in OFF_SCOPE_KEYWORDS):
         logger.info(f"possible_off_scope_message: {body.message[:50]}")
@@ -510,18 +564,20 @@ async def chat_endpoint(
             filter_action=None,
         )
 
-    messages.append({
-        "role": "assistant",
-        "content": response_message.content or "",
-        "tool_calls": [
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-            }
-            for tc in tool_calls
-        ],
-    })
+    messages.append(
+        {
+            "role": "assistant",
+            "content": response_message.content or "",
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ],
+        }
+    )
 
     actions_taken: list[str] = []
     filter_action: dict[str, str] | None = None
@@ -564,16 +620,12 @@ async def chat_endpoint(
 
             elif fn_name == "list_emails_by_category":
                 category: str = args.get("category", "other")
-                result = await execute_list_by_category(
-                    category=category, user_id=user_id, db=db
-                )
+                result = await execute_list_by_category(category=category, user_id=user_id, db=db)
                 filter_action = {"type": "category", "value": category}
 
             elif fn_name == "search_senders_by_keyword":
                 keyword: str = args.get("keyword", "")
-                result = await execute_search_by_keyword(
-                    keyword=keyword, user_id=user_id, db=db
-                )
+                result = await execute_search_by_keyword(keyword=keyword, user_id=user_id, db=db)
                 if result.get("senders"):
                     filter_action = {"type": "domain", "value": result["senders"][0]["domain"]}
 
@@ -603,11 +655,17 @@ async def chat_endpoint(
                 domain = args.get("domain", "")
                 filter_action = {"type": "domain", "value": domain}
                 uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
-                row = (await db.execute(
-                    select(SenderSummary.total_count, SenderSummary.unread_count, SenderSummary.display_name)
-                    .where(SenderSummary.user_id == uid)
-                    .where(SenderSummary.sender_domain == domain.lower())
-                )).fetchone()
+                row = (
+                    await db.execute(
+                        select(
+                            SenderSummary.total_count,
+                            SenderSummary.unread_count,
+                            SenderSummary.display_name,
+                        )
+                        .where(SenderSummary.user_id == uid)
+                        .where(SenderSummary.sender_domain == domain.lower())
+                    )
+                ).fetchone()
                 result = {
                     "filtered": True,
                     "domain": domain,
@@ -621,11 +679,14 @@ async def chat_endpoint(
                 category = args.get("category", "other")
                 filter_action = {"type": "category", "value": category}
                 uid = uuid_mod.UUID(user_id) if isinstance(user_id, str) else user_id
-                sender_count = (await db.execute(
-                    select(func.count()).select_from(SenderSummary)
-                    .where(SenderSummary.user_id == uid)
-                    .where(SenderSummary.ai_category == category)
-                )).scalar() or 0
+                sender_count = (
+                    await db.execute(
+                        select(func.count())
+                        .select_from(SenderSummary)
+                        .where(SenderSummary.user_id == uid)
+                        .where(SenderSummary.ai_category == category)
+                    )
+                ).scalar() or 0
                 result = {
                     "filtered": True,
                     "category": category,
@@ -635,11 +696,13 @@ async def chat_endpoint(
             else:
                 result = {"error": "unknown_tool", "name": fn_name}
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": json.dumps(result, ensure_ascii=False, default=str),
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                }
+            )
 
     try:
         final_resp = ai_service.client.chat.completions.create(
