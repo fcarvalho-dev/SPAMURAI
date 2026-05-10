@@ -22,7 +22,7 @@ jobs:
       - name: Lint
         run: ruff check . --exit-zero
       - name: Format check
-        run: ruff format --check . --exit-zero
+        run: ruff format --check .
 
   frontend:
     runs-on: ubuntu-latest
